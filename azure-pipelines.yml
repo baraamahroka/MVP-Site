@@ -1,0 +1,55 @@
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+  branches:
+    include:
+    - master
+
+resources:
+- repo: self
+  clean: true
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: 'ae5840f1-be0f-4987-b035-c42054ca1491'
+  imageRepository: 'baraamahrokamvpsite'
+  containerRegistry: 'acrsitecoredev.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/docker/build/cd/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+  # Agent VM image name
+  vmImageName: 'windows-latest'
+
+stages:
+- stage: Build
+  displayName: Build Images + Push to ACR
+  jobs:  
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: $(vmImageName)
+    steps:
+    - task: DockerCompose@0
+      displayName: "Build Images"
+      inputs:
+        containerregistrytype: 'Container Registry'
+        dockerRegistryEndpoint: 'acrsitecoredev-6455'
+        dockerComposeFile: '**/docker-compose.yml'
+        additionalDockerComposeFiles: 'docker-compose.override.yml'
+        qualifyImageNames: false
+        action: 'Build services'
+        additionalImageTags: '$(Build.BuildNumber)-$(Build.SourceBranchName)'
+        includeLatestTag: true
+    - task: DockerCompose@0
+      displayName: "Push Images with Latest Tag"
+      inputs:
+        containerregistrytype: 'Azure Container Registry'
+        dockerComposeFile: '**/docker-compose.yml'
+        additionalDockerComposeFiles: 'docker-compose.override.yml'
+        dockerComposeFileArgs: '$(DOCKER_COMPOSE_ARGS)'
+        action: 'Push services'
+        additionalImageTags: '$(Build.BuildNumber)-$(Build.SourceBranchName)'
+        includeLatestTag: true
+      condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
